@@ -29,6 +29,8 @@ import psutil
 import plotting
 from models import AlphaScheduler 
 import random
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 class Trainer:
     #Class to load .json file and launch trainings
@@ -142,7 +144,7 @@ class Trainer:
     def train(self):
         if not self.training_input_flag:
             self.prepare_training_input()
-        optimizer = Adam()
+        optimizer = Adam(learning_rate = 0.01)
         validation_split = 0.02
         dropout_level = 0.10
 
@@ -303,3 +305,42 @@ class Trainer:
         
     
         plotting.plot_clusters(plotting_data_sets,plotting_file_name)
+    
+    #Generates a plot of desired data type vs uncertainty
+    def plot_vs_uncertainty(self, data_type):
+        if not self.testing_input_flag:
+            self.prepare_testing_input()
+        model = load_model(self.model_dest, custom_objects={self.loss_name: getattr(losses,self.loss_name),"mse_position":losses.mse_position,"mean_pulls":losses.mean_pulls})
+        file_name = f"plots/{self.layer}_{self.axis}_{data_type}.png"
+        
+        uncertainty = self.pred[:,1]
+        if data_type == "cot_a":
+            data_to_plot = self.angles_test[:,0]
+        elif data_type == "cot_b":
+            data_to_plot = self.angles_test[:,1]
+        elif data_type == "hit_pos":
+            data_to_plot = self.position_test[:,0]
+        elif data_type == "charge":
+            data_to_plot = self.clucharges_test[:,0]
+        elif data_type == "size":
+            data_to_plot = self.clustersize_test[:,0]
+        
+        x_min = data_to_plot.min()
+        x_max = data_to_plot.max()
+        range  = x_max - x_min
+        num_bins = range #set to 200 for every other type of data
+        x_bins = np.arange(x_min,x_max, range / num_bins)
+        temp_bins = np.arange(0,120.6,0.6)
+        y_bins = temp_bins[(temp_bins < 115) | (temp_bins >= 120)]
+        plt.hist2d(data_to_plot, uncertainty, bins=[x_bins, y_bins], cmap='viridis', norm = LogNorm())
+        plt.colorbar(label='Log-scaled count')
+        plt.xlabel(data_type)
+        plt.ylabel("Uncertainty")
+        plt.title(self.layer+" "+self.axis+" "+data_type)
+        plt.tight_layout()
+        plt.savefig(file_name)
+        print("Saving "+file_name)
+        plt.close()
+        
+        
+    
